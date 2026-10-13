@@ -13,6 +13,9 @@ guia-uso-tracker-CCAR-F.pdf
 .agents/
 skills-lock.json
 
+# Reporte que genera el hook de validación en cada commit
+.claude-commit-validation.txt
+
 # Sistema
 Thumbs.db
 desktop.ini
