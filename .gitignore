@@ -1,0 +1,19 @@
+# Progreso exportado: contiene tus notas, miss log y resultados. Nunca debe subirse.
+ccarf-progreso-*.json
+
+# Material de estudio personal: respuestas propias, notas, datos de la empresa.
+# Quítalos de aquí si algún día decides publicarlos.
+plan-estudio-CCAR-F.md
+claude-code-in-action-quiz.md
+prompt-claude-code-tracker-CCAR-F.md
+guia-uso-tracker-CCAR-F.pdf
+
+# Skills vendorizadas y configuración local de Claude Code
+.claude/
+.agents/
+skills-lock.json
+
+# Sistema
+Thumbs.db
+desktop.ini
+.DS_Store
