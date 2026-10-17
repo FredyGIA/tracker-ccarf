@@ -28,9 +28,25 @@ En `localStorage`, bajo la clave `ccarf-tracker-v1`, **solo en el navegador dond
 Consecuencias prácticas:
 
 - El PC y el celular son **dos progresos distintos**, aunque abras la misma URL.
-- Para moverlo: **Exportar JSON** en un dispositivo e **Importar JSON** en el otro. El import reemplaza todo, no fusiona.
-- Limpiar los datos del navegador borra el avance. Exporta con frecuencia.
+- Limpiar los datos del navegador borra el avance. Copia o exporta con frecuencia.
 - Abierto como archivo local (`file://`), Safari bloquea el almacenamiento. Si aparece la barra roja de aviso, ese navegador no está guardando nada: úsalo publicado o cámbiate a Chrome o Edge.
+
+## Llevar el progreso a otro dispositivo
+
+La sección **Sincronizar y analizar** tiene lo necesario:
+
+| Botón | Para qué |
+|---|---|
+| Copiar progreso | Pone todo el estado como JSON en el portapapeles. Pésalo en kilobytes, no en megas: con un simulacro completo ronda los 2 KB, así que cabe en un mensaje de WhatsApp o en una nota. |
+| Pegar progreso | Abre un cuadro donde pegas ese JSON. Pide confirmación y **reemplaza** el progreso local, no lo fusiona. |
+| Copiar informe para análisis | Genera un resumen en Markdown (cobertura por dominio, fallos del quiz y de los simulacros con su anti-patrón, miss log y checklist) pensado para pegarlo en un chat y pedir un plan de refuerzo. |
+| Descargar JSON | La copia de seguridad en archivo, igual que el botón de la cabecera. |
+
+Flujo típico: terminas un simulacro en el PC, **Copiar progreso**, te lo envías por mensaje, lo abres en el celular y **Pegar progreso**. Para pedir análisis, **Copiar informe** y pégalo en el chat.
+
+Si el navegador no permite copiar solo, el texto aparece en un cuadro para seleccionarlo a mano.
+
+> **No subas tu progreso a este repositorio.** Es público y el miss log contiene tus puntos débiles. `.gitignore` ya excluye `ccarf-progreso-*.json`. Si quieres guardarlo en GitHub, usa un **gist secreto**: pega ahí el JSON y, desde el otro dispositivo, cópialo del gist y úsalo en «Pegar progreso». Un gist secreto no es privado de verdad —cualquiera con el enlace lo ve— pero no aparece en búsquedas ni en tu perfil.
 
 ## Publicarlo
 

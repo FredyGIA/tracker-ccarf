@@ -211,6 +211,7 @@ details[open] summary{margin-bottom:5px}
 
 <nav class="jump">
   <a href="#avance">Avance</a>
+  <a href="#sync">Sincronizar</a>
   <a href="#ejercicios">Ejercicios</a>
   <a href="#quiz">Quiz</a>
   <a href="#simulacros">Simulacros</a>
@@ -228,6 +229,34 @@ details[open] summary{margin-bottom:5px}
     <div class="bar"><i id="globalBar" style="width:0%"></i></div>
     <p class="small mut" style="margin-top:8px">Cobertura ponderada por minutos: cada dominio aporta su peso del examen en proporción a los minutos de ejercicio completados. Solo cuenta <b>hecho</b>; <b>a repasar</b> no suma.</p>
     <div id="domBars"></div>
+  </div>
+</section>
+
+<section id="sync">
+  <h2>Sincronizar y analizar</h2>
+  <div class="panel">
+    <p class="small mut">El progreso vive en este navegador. Para llevarlo a otro equipo o al celular, cópialo aquí y pégalo allá. El informe es un resumen corto para pegar en el chat y pedir análisis.</p>
+    <div class="row" style="margin-top:10px">
+      <button class="primary" id="btnCopyState">Copiar progreso</button>
+      <button id="btnPasteState">Pegar progreso</button>
+      <button id="btnCopyReport">Copiar informe para análisis</button>
+      <button id="btnExport2">Descargar JSON</button>
+      <span id="syncMsg" class="small"></span>
+    </div>
+    <div id="pasteBox" hidden style="margin-top:10px">
+      <label class="f">Pega aquí el JSON copiado del otro dispositivo
+        <textarea id="pasteArea" rows="5" placeholder="{&quot;v&quot;:1, ...}"></textarea>
+      </label>
+      <div class="row" style="margin-top:6px">
+        <button class="primary" id="btnPasteApply">Importar lo pegado</button>
+        <button id="btnPasteCancel">Cancelar</button>
+      </div>
+    </div>
+    <div id="reportBox" hidden style="margin-top:10px">
+      <label class="f"><span id="outLabel"></span>
+        <textarea id="reportArea" rows="10" readonly></textarea>
+      </label>
+    </div>
   </div>
 </section>
 
@@ -1854,24 +1883,183 @@ function doExport(){
   setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
 }
 
+// Punto único de entrada para importar, venga de archivo o del portapapeles.
+function applyImportText(text, origen){
+  let obj;
+  try { obj = JSON.parse(text); }
+  catch(err){ alert("El " + origen + " no es JSON válido: " + err.message); return false; }
+  const norm = normalize(obj);
+  if(!norm){ alert("El " + origen + " no tiene el formato esperado (falta v:1 o está corrupto). No se importó nada."); return false; }
+  const mocksHechos = MOCK_IDS.filter(function(m){ return norm.mocks[m] && norm.mocks[m].finishedAt; });
+  if(!confirm("¿Reemplazar el progreso actual?\n\n" +
+    Object.keys(norm.ex).length + " ejercicios con estado\n" +
+    Object.keys(norm.quiz).length + " respuestas del quiz\n" +
+    mocksHechos.length + " simulacro(s) calificado(s)\n" +
+    norm.miss.length + " entradas de miss log\n" +
+    Object.keys(norm.ready).length + " ítems del checklist\n\nEsto sobrescribe lo que tengas ahora.")) return false;
+  state = norm;
+  save();
+  renderAll();
+  return true;
+}
+
 function doImport(file){
   const r = new FileReader();
-  r.onload = function(){
-    let obj;
-    try { obj = JSON.parse(r.result); }
-    catch(err){ alert("El archivo no es JSON válido: " + err.message); return; }
-    const norm = normalize(obj);
-    if(!norm){ alert("El archivo no tiene el formato esperado (falta v:1 o está corrupto). No se importó nada."); return; }
-    const n = Object.keys(norm.ex).length;
-    if(!confirm("Reemplazar el progreso actual por el del archivo?\n\n" +
-      n + " ejercicios con estado\n" + norm.miss.length + " entradas de miss log\n" +
-      Object.keys(norm.ready).length + " ítems del checklist\n\nEsto sobrescribe lo que tengas ahora.")) return;
-    state = norm;
-    save();
-    renderAll();
-  };
+  r.onload = function(){ applyImportText(r.result, "archivo"); };
   r.onerror = function(){ alert("No se pudo leer el archivo."); };
   r.readAsText(file);
+}
+
+/* ---------- sincronización por portapapeles e informe ---------- */
+
+let syncTimer = null;
+function syncMsg(txt){
+  const el = document.getElementById("syncMsg");
+  el.textContent = txt;
+  el.style.color = "var(--hecho)";
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(function(){ el.textContent = ""; }, 4000);
+}
+
+// Muestra el texto en pantalla para copiarlo a mano cuando el portapapeles falla.
+function showOut(label, txt){
+  document.getElementById("outLabel").textContent = label;
+  document.getElementById("reportArea").value = txt;
+  document.getElementById("reportBox").hidden = false;
+}
+
+// navigator.clipboard exige contexto seguro; en file:// cae al método antiguo,
+// y si ese tampoco funciona se muestra el texto para copiarlo manualmente.
+function copyText(txt, okMsg, failLabel){
+  const legacy = function(){
+    const ta = document.createElement("textarea");
+    ta.value = txt;
+    ta.style.cssText = "position:fixed;top:0;left:0;opacity:0";
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch(err){ ok = false; }
+    document.body.removeChild(ta);
+    if(ok){ syncMsg(okMsg); }
+    else {
+      syncMsg("Este navegador no deja copiar solo: selecciona el texto de abajo y cópialo.");
+      showOut(failLabel, txt);
+    }
+  };
+  if(navigator.clipboard && window.isSecureContext){
+    navigator.clipboard.writeText(txt).then(function(){ syncMsg(okMsg); }, legacy);
+  } else { legacy(); }
+}
+
+function pct(a, b){ return b ? Math.round(a / b * 100) : 0; }
+function corto(s, n){ return s.length > n ? s.slice(0, n - 1).trim() + "…" : s; }
+
+function buildReport(){
+  const L = [], p = progress();
+  const hoy = new Date().toISOString().slice(0, 10);
+  L.push("# Informe de avance CCAR-F");
+  L.push("Fecha: " + hoy + (state.examDate ? " · Examen: " + state.examDate +
+    " (" + document.getElementById("daysLeft").textContent + ")" : " · Sin fecha de examen fijada"));
+  L.push("");
+
+  L.push("## Cobertura ponderada");
+  L.push("Global: " + p.pts.toFixed(1) + "% de 100 · " + p.doneN + "/" + p.n +
+    " ejercicios · " + p.doneMin + "/" + p.totalMin + " min");
+  DOMAINS.forEach(function(d){
+    const r = p.per[d.id];
+    L.push("- " + d.id + " " + d.name + " (" + d.w + "%): " + r.pts.toFixed(1) + "/" + r.w.toFixed(1) +
+      " pts · " + r.done + "/" + r.n + " ej · " + r.dMin + "/" + r.tMin + " min");
+  });
+  L.push("");
+
+  // ejercicios por estado
+  const porEstado = {};
+  STATES.forEach(function(s){ porEstado[s.id] = []; });
+  EXERCISES.forEach(function(e){ porEstado[stateOf(e.id)].push(e.id); });
+  L.push("## Ejercicios");
+  STATES.forEach(function(s){ L.push("- " + s.label + ": " + porEstado[s.id].length); });
+  if(porEstado.curso.length) L.push("En curso: " + porEstado.curso.join(", "));
+  if(porEstado.repasar.length) L.push("A repasar: " + porEstado.repasar.join(", "));
+  const conNotas = EXERCISES.filter(function(e){ return noteOf(e.id).trim(); });
+  if(conNotas.length){
+    L.push("");
+    L.push("### Notas");
+    conNotas.forEach(function(e){ L.push("- " + e.id + ": " + corto(noteOf(e.id).replace(/\s+/g, " "), 180)); });
+  }
+  L.push("");
+
+  // quiz del curso
+  const qDone = QUIZ.filter(function(q){ return state.quiz[q.id]; });
+  L.push("## Quiz del curso (Claude Code in Action)");
+  if(!qDone.length){ L.push("Sin responder."); }
+  else {
+    const qOk = qDone.filter(function(q){ return state.quiz[q.id].a === q.ok; });
+    L.push("Aciertos: " + qOk.length + "/" + qDone.length + " respondidas (de " + QUIZ.length + ")");
+    qDone.filter(function(q){ return state.quiz[q.id].a !== q.ok; }).forEach(function(q){
+      L.push("- FALLÓ " + q.id + " [" + q.dom + (q.ap ? " " + q.ap : "") + "] marcó " +
+        LTR[state.quiz[q.id].a] + ", correcta " + LTR[q.ok] + " — " + corto(q.es.q, 90));
+    });
+  }
+  L.push("");
+
+  // simulacros
+  L.push("## Simulacros");
+  MOCK_IDS.forEach(function(m){
+    const st = state.mocks[m];
+    if(!st || !st.finishedAt){
+      L.push("### " + m + ": " + (st && st.startedAt ? "empezado, sin calificar" : "sin empezar"));
+      return;
+    }
+    const sc = mockScore(m);
+    L.push("### " + m + " — " + (sc.pass ? "APROBADO" : "NO APROBADO") +
+      " · " + sc.right + "/" + sc.total + " (" + pct(sc.right, sc.total) + "%) · escalado aprox. " + sc.scaled +
+      " · tiempo " + fmtClock(Math.max(0, st.finishedAt - st.startedAt)) + (st.timeout ? " (se agotó)" : ""));
+    DOMAINS.forEach(function(d){
+      const r = sc.per[d.id];
+      L.push("- " + d.id + " (" + d.w + "%): " + r.right + "/" + r.n + " = " + pct(r.right, r.n) + "%");
+    });
+    const fallos = mockQs(m).filter(function(q){ return !sameSet(st.a[q.id] || [], q.ok); });
+    if(fallos.length){
+      L.push("Falladas (" + fallos.length + "):");
+      fallos.forEach(function(q){
+        const a = st.a[q.id] || [];
+        L.push("- " + q.id + " [" + q.dom + (q.ap ? " " + q.ap : "") + "] marcó " +
+          (a.length ? a.slice().sort().map(function(i){ return LTR[i]; }).join("") : "nada") +
+          ", correcta " + q.ok.slice().sort().map(function(i){ return LTR[i]; }).join("") +
+          " — " + corto(q.es.q, 95));
+      });
+    }
+  });
+  L.push("");
+
+  // miss log
+  L.push("## Miss log (" + state.miss.length + " entradas)");
+  if(state.miss.length){
+    const porDom = {}, porAp = {};
+    state.miss.forEach(function(m){
+      porDom[m.dom || "?"] = (porDom[m.dom || "?"] || 0) + 1;
+      if(m.ap) porAp[m.ap] = (porAp[m.ap] || 0) + 1;
+    });
+    L.push("Por dominio: " + Object.keys(porDom).map(function(k){ return k + ":" + porDom[k]; }).join(" · "));
+    if(Object.keys(porAp).length)
+      L.push("Por anti-patrón: " + Object.keys(porAp).sort().map(function(k){ return k + ":" + porAp[k]; }).join(" · "));
+    state.miss.forEach(function(m){
+      const partes = [];
+      if(m.pregunta) partes.push(corto(m.pregunta.replace(/\s+/g, " "), 110));
+      if(m.leccion) partes.push("Regla: " + corto(m.leccion.replace(/\s+/g, " "), 110));
+      if(partes.length) L.push("- [" + (m.dom || "?") + (m.ap ? " " + m.ap : "") + "] " + partes.join(" | "));
+    });
+  }
+  L.push("");
+
+  // checklist
+  const hechos = READY.filter(function(c){ return state.ready[c.id]; });
+  L.push("## Checklist «estoy listo»: " + hechos.length + "/" + READY.length);
+  READY.forEach(function(c){ L.push("- [" + (state.ready[c.id] ? "x" : " ") + "] " + c.id + " " + corto(c.t, 90)); });
+  L.push("");
+  L.push("Anti-patrones: AP1 terminar por texto · AP2 auto-revisión en la misma sesión · " +
+    "AP3 tool sprawl · AP4 multi-agente por defecto · AP5 enforcement por prompt · AP6 complejidad no ganada.");
+  return L.join("\n");
 }
 
 /* ---------- arranque ---------- */
@@ -1896,6 +2084,35 @@ function init(){
     state.examDate = this.value; save(); renderDays();
   };
   document.getElementById("btnExport").onclick = doExport;
+  document.getElementById("btnExport2").onclick = doExport;
+  document.getElementById("btnCopyState").onclick = function(){
+    copyText(JSON.stringify(state), "Progreso copiado. Pégalo en el otro dispositivo.",
+      "Progreso. Cópialo y pégalo en «Pegar progreso» del otro dispositivo.");
+  };
+  document.getElementById("btnPasteState").onclick = function(){
+    const box = document.getElementById("pasteBox");
+    box.hidden = !box.hidden;
+    if(!box.hidden) document.getElementById("pasteArea").focus();
+  };
+  document.getElementById("btnPasteCancel").onclick = function(){
+    document.getElementById("pasteArea").value = "";
+    document.getElementById("pasteBox").hidden = true;
+  };
+  document.getElementById("btnPasteApply").onclick = function(){
+    const txt = document.getElementById("pasteArea").value.trim();
+    if(!txt){ syncMsg("No hay nada pegado."); return; }
+    if(applyImportText(txt, "texto pegado")){
+      document.getElementById("pasteArea").value = "";
+      document.getElementById("pasteBox").hidden = true;
+      syncMsg("Progreso importado.");
+    }
+  };
+  document.getElementById("btnCopyReport").onclick = function(){
+    const txt = buildReport();
+    showOut("Informe generado. Ya está en el portapapeles; si no, cópialo de aquí.", txt);
+    copyText(txt, "Informe copiado (" + txt.length + " caracteres). Pégalo en el chat.",
+      "Informe. Selecciónalo y cópialo para pegarlo en el chat.");
+  };
   document.getElementById("btnImport").onclick = function(){ document.getElementById("fileImport").click(); };
   document.getElementById("fileImport").onchange = function(){
     if(this.files && this.files[0]) doImport(this.files[0]);
