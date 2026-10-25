@@ -240,8 +240,19 @@ details[open] summary{margin-bottom:5px}
       <button class="primary" id="btnCopyState">Copiar progreso</button>
       <button id="btnPasteState">Pegar progreso</button>
       <button id="btnCopyReport">Copiar informe para análisis</button>
+      <button id="btnLoadUrl">Cargar desde URL</button>
       <button id="btnExport2">Descargar JSON</button>
       <span id="syncMsg" class="small"></span>
+    </div>
+    <div id="urlBox" hidden style="margin-top:10px">
+      <label class="f">URL del JSON (por ejemplo el enlace <b>Raw</b> de un gist secreto)
+        <input type="url" id="urlArea" placeholder="https://gist.githubusercontent.com/usuario/id/raw/progreso.json">
+      </label>
+      <div class="row" style="margin-top:6px">
+        <button class="primary" id="btnUrlApply">Cargar</button>
+        <button id="btnUrlCancel">Cancelar</button>
+      </div>
+      <p class="small mut" style="margin-top:6px">Se guarda la última URL usada para no volver a escribirla. El contenido se valida igual que un archivo importado.</p>
     </div>
     <div id="pasteBox" hidden style="margin-top:10px">
       <label class="f">Pega aquí el JSON copiado del otro dispositivo
@@ -1374,7 +1385,7 @@ EXERCISES.forEach(function(e){ EX_BY_ID[e.id] = e; });
 let state = blank();
 
 function blank(){
-  return { v:1, examDate:"", lang:"es", ex:{}, miss:[], ready:{}, quiz:{}, mocks:{}, mockCur:"M1" };
+  return { v:1, examDate:"", lang:"es", syncUrl:"", ex:{}, miss:[], ready:{}, quiz:{}, mocks:{}, mockCur:"M1" };
 }
 
 function load(){
@@ -1415,6 +1426,7 @@ function normalize(obj){
     READY.forEach(function(c){ if(obj.ready[c.id] === true) out.ready[c.id] = true; });
   }
   out.lang = obj.lang === "en" ? "en" : "es";
+  out.syncUrl = (typeof obj.syncUrl === "string" && /^https:\/\//.test(obj.syncUrl)) ? obj.syncUrl : "";
   if(obj.quiz && typeof obj.quiz === "object"){
     Object.keys(obj.quiz).forEach(function(id){
       const q = QUIZ_BY_ID[id];
@@ -1951,6 +1963,32 @@ function copyText(txt, okMsg, failLabel){
   } else { legacy(); }
 }
 
+// Carga el progreso desde una URL (gist secreto u otro JSON accesible por HTTPS).
+// El contenido pasa por el mismo normalize() que un archivo: nunca se ejecuta, solo se valida.
+function loadFromUrl(url){
+  let u;
+  try { u = new URL(url); } catch(err){ syncMsg("Esa no es una URL válida."); return; }
+  if(u.protocol !== "https:"){ syncMsg("Solo se admiten URLs https."); return; }
+  syncMsg("Descargando…");
+  fetch(u.href, { cache:"no-store" })
+    .then(function(r){
+      if(!r.ok) throw new Error("HTTP " + r.status);
+      return r.text();
+    })
+    .then(function(txt){
+      if(applyImportText(txt, "contenido de la URL")){
+        state.syncUrl = u.href;
+        save();
+        document.getElementById("urlBox").hidden = true;
+        syncMsg("Progreso cargado desde la URL.");
+      }
+    })
+    .catch(function(err){
+      syncMsg("No se pudo descargar: " + err.message +
+        ". Revisa que la URL sea el enlace Raw y que permita lectura.");
+    });
+}
+
 function pct(a, b){ return b ? Math.round(a / b * 100) : 0; }
 function corto(s, n){ return s.length > n ? s.slice(0, n - 1).trim() + "…" : s; }
 
@@ -2106,6 +2144,21 @@ function init(){
       document.getElementById("pasteBox").hidden = true;
       syncMsg("Progreso importado.");
     }
+  };
+  document.getElementById("btnLoadUrl").onclick = function(){
+    const box = document.getElementById("urlBox");
+    box.hidden = !box.hidden;
+    if(!box.hidden){
+      const inp = document.getElementById("urlArea");
+      if(!inp.value && state.syncUrl) inp.value = state.syncUrl;
+      inp.focus();
+    }
+  };
+  document.getElementById("btnUrlCancel").onclick = function(){
+    document.getElementById("urlBox").hidden = true;
+  };
+  document.getElementById("btnUrlApply").onclick = function(){
+    loadFromUrl(document.getElementById("urlArea").value.trim());
   };
   document.getElementById("btnCopyReport").onclick = function(){
     const txt = buildReport();

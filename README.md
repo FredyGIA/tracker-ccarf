@@ -40,13 +40,32 @@ La sección **Sincronizar y analizar** tiene lo necesario:
 | Copiar progreso | Pone todo el estado como JSON en el portapapeles. Pésalo en kilobytes, no en megas: con un simulacro completo ronda los 2 KB, así que cabe en un mensaje de WhatsApp o en una nota. |
 | Pegar progreso | Abre un cuadro donde pegas ese JSON. Pide confirmación y **reemplaza** el progreso local, no lo fusiona. |
 | Copiar informe para análisis | Genera un resumen en Markdown (cobertura por dominio, fallos del quiz y de los simulacros con su anti-patrón, miss log y checklist) pensado para pegarlo en un chat y pedir un plan de refuerzo. |
+| Cargar desde URL | Descarga el JSON desde una URL https (el enlace **Raw** de un gist, por ejemplo) y lo importa. Recuerda la última URL usada. |
 | Descargar JSON | La copia de seguridad en archivo, igual que el botón de la cabecera. |
 
 Flujo típico: terminas un simulacro en el PC, **Copiar progreso**, te lo envías por mensaje, lo abres en el celular y **Pegar progreso**. Para pedir análisis, **Copiar informe** y pégalo en el chat.
 
 Si el navegador no permite copiar solo, el texto aparece en un cuadro para seleccionarlo a mano.
 
-> **No subas tu progreso a este repositorio.** Es público y el miss log contiene tus puntos débiles. `.gitignore` ya excluye `ccarf-progreso-*.json`. Si quieres guardarlo en GitHub, usa un **gist secreto**: pega ahí el JSON y, desde el otro dispositivo, cópialo del gist y úsalo en «Pegar progreso». Un gist secreto no es privado de verdad —cualquiera con el enlace lo ve— pero no aparece en búsquedas ni en tu perfil.
+> **No subas tu progreso a este repositorio.** Es público y el miss log contiene tus puntos débiles. `.gitignore` ya excluye `ccarf-progreso-*.json`.
+
+### Progreso en la nube con un gist secreto
+
+Permite tener una sola copia de referencia y que el celular se sincronice con un toque.
+
+```bash
+# una sola vez, desde el PC, con el JSON descargado
+gh gist create ccarf-progreso.json --secret --desc "Progreso CCAR-F"
+gh gist view <id> --files            # muestra el nombre del archivo
+```
+
+Copia el enlace **Raw** del gist y pégalo en **Cargar desde URL**: queda guardado y las siguientes veces basta con abrir y pulsar Cargar.
+
+Para actualizarlo tras una sesión de estudio: `gh gist edit <id>` desde el PC, o editarlo en la web del gist pegando el JSON nuevo.
+
+La app **no escribe** en el gist. Hacerlo exigiría un token de GitHub dentro de una página estática pública, que es una fuga de credenciales esperando ocurrir. La escritura se queda en `gh` o en la web; la lectura es automática.
+
+> Un gist secreto **no es privado**: cualquiera con el enlace lo ve. No aparece en búsquedas ni en tu perfil, nada más.
 
 ## Publicarlo
 
